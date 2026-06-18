@@ -444,15 +444,18 @@ st.set_page_config(
     page_title="כאוס עירוני | Urban Chaos",
     page_icon="🏠",
     layout="wide",
-    initial_sidebar_state="expanded",
+    # Keep the familiar expanded desktop layout while Streamlit collapses the
+    # sidebar on narrow screens. CSS below fully hides the zero-width mobile
+    # sidebar shell that some iPhone in-app browsers otherwise still paint.
+    initial_sidebar_state="auto",
 )
 
-language_choice = st.sidebar.radio(
+language_choice = st.selectbox(
     "שפה / Language",
     ["עברית", "English"],
     index=0,
-    horizontal=True,
     key="site_language",
+    label_visibility="collapsed",
 )
 lang = "he" if language_choice == "עברית" else "en"
 direction = "rtl" if lang == "he" else "ltr"
@@ -477,8 +480,9 @@ MICROCOPY = t("microcopy")
 TOP_DISCLAIMER = t("top_disclaimer")
 DETAIL_DISCLAIMER = t("stage_disclaimer")
 
-st.markdown(
-    """
+def inject_mobile_css(direction: str, text_align: str) -> None:
+    """Apply responsive, direction-aware styling once near the app entry point."""
+    css = """
     <style>
     :root {
         --kaos-accent: #1d8a70;
@@ -487,26 +491,53 @@ st.markdown(
         --kaos-border: rgba(127, 127, 127, .24);
         --kaos-muted: rgba(127, 127, 127, .13);
     }
+    *, *::before, *::after {
+        box-sizing: border-box;
+    }
     html, body, [class*="css"], .stApp {
         direction: __DIRECTION__;
         text-align: __TEXT_ALIGN__;
         font-family: "Segoe UI", "Rubik", Arial, "Noto Sans Hebrew", sans-serif;
         line-height: 1.65;
+        max-width: 100%;
+        overflow-wrap: break-word;
+        word-break: normal;
+    }
+    .stApp {
+        overflow-x: hidden;
     }
     section[data-testid="stSidebar"],
     section[data-testid="stSidebar"] * {
         direction: __DIRECTION__;
         text-align: __TEXT_ALIGN__;
     }
+    section[data-testid="stSidebar"][aria-expanded="false"] {
+        display: none !important;
+        overflow: hidden !important;
+    }
     .block-container {
+        width: 100%;
         max-width: 1260px;
-        padding-top: 2rem;
-        padding-bottom: 3rem;
+        padding-top: clamp(1rem, 3vw, 2rem);
+        padding-inline: clamp(.8rem, 3vw, 2.5rem);
+        padding-bottom: max(7rem, calc(env(safe-area-inset-bottom) + 5rem));
+        overflow-x: hidden;
+    }
+    .st-key-site_language {
+        width: min(100%, 11rem);
+        max-width: 11rem;
+        margin: 0 0 .75rem auto;
+    }
+    .st-key-site_language [data-testid="stSelectbox"] {
+        width: 100%;
+        min-width: 0;
     }
     .hero {
-        position: relative;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
         overflow: hidden;
-        padding: clamp(1.55rem, 4vw, 2.7rem);
+        padding: clamp(1.1rem, 4vw, 2.7rem);
         border-radius: 28px;
         background:
             radial-gradient(circle at 8% 15%, rgba(217, 119, 6, .16), transparent 25%),
@@ -515,25 +546,32 @@ st.markdown(
         margin-bottom: 1.1rem;
         box-shadow: 0 18px 50px rgba(15, 23, 42, .07);
     }
+    .hero, .hero * {
+        max-width: 100%;
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: break-word;
+        word-break: normal;
+    }
     .hero h1 {
         margin: 0 0 .3rem 0;
-        font-size: clamp(2.45rem, 7vw, 4.8rem);
-        line-height: 1;
+        font-size: clamp(2rem, 7vw, 4.8rem);
+        line-height: 1.08;
         color: var(--text-color);
-        letter-spacing: -.045em;
+        letter-spacing: normal;
     }
     .hero p {
         margin: 0;
+        width: 100%;
         max-width: 820px;
-        font-size: clamp(1rem, 2.2vw, 1.25rem);
+        font-size: clamp(.98rem, 2.2vw, 1.25rem);
         color: var(--text-color);
         opacity: .82;
         font-weight: 600;
     }
     .hero-kicker {
-        display: inline-flex;
-        align-items: center;
-        gap: .45rem;
+        display: inline-block;
+        max-width: 100%;
         margin-bottom: .8rem;
         padding: .28rem .72rem;
         border-radius: 999px;
@@ -541,17 +579,22 @@ st.markdown(
         color: var(--text-color);
         font-size: .88rem;
         font-weight: 800;
+        line-height: 1.45;
     }
     .microcopy {
         display: inline-block;
+        max-width: 100%;
         margin-top: 1rem;
         padding: .42rem .8rem;
         border-radius: 10px;
         background: rgba(217, 119, 6, .12);
         font-weight: 800;
         color: var(--text-color);
+        line-height: 1.45;
     }
     .disclaimer-box {
+        width: 100%;
+        max-width: 100%;
         padding: 1rem 1.15rem;
         border: 1px solid rgba(217, 119, 6, .32);
         border-inline-start: 5px solid var(--kaos-warm);
@@ -572,6 +615,7 @@ st.markdown(
         margin: 0;
         color: var(--text-color);
         opacity: .74;
+        width: 100%;
         max-width: 920px;
     }
     .legend-grid {
@@ -581,7 +625,7 @@ st.markdown(
         margin: .85rem 0 1.15rem;
     }
     .legend-card {
-        min-height: 132px;
+        min-width: 0;
         padding: .85rem .9rem;
         border: 1px solid var(--kaos-border);
         border-radius: 16px;
@@ -616,6 +660,9 @@ st.markdown(
         margin: .8rem 0 1.25rem;
     }
     .step-card, .info-card, .public-interest-card {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
         padding: 1rem 1.05rem;
         border: 1px solid var(--kaos-border);
         border-radius: 17px;
@@ -643,6 +690,9 @@ st.markdown(
         font-weight: 700;
     }
     .stage-card {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
         border: 1px solid rgba(29, 138, 112, .32);
         border-radius: 22px;
         padding: clamp(1.15rem, 3vw, 1.7rem);
@@ -664,6 +714,7 @@ st.markdown(
     }
     .stage-card p {
         margin: 0;
+        width: 100%;
         max-width: 900px;
         font-size: 1.03rem;
         opacity: .84;
@@ -681,6 +732,9 @@ st.markdown(
         background: linear-gradient(90deg, var(--kaos-accent), #46b89b);
     }
     .credit-card {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -716,9 +770,11 @@ st.markdown(
     }
     div[data-testid="stDataFrame"] {
         direction: __DIRECTION__;
+        width: 100%;
+        max-width: 100%;
         margin: .7rem 0 1rem;
         border-radius: 16px;
-        overflow: hidden;
+        overflow-x: auto;
     }
     div[data-testid="stMetric"] {
         border: 1px solid var(--kaos-border);
@@ -729,6 +785,7 @@ st.markdown(
     div[data-testid="stLinkButton"] a {
         border-radius: 12px;
         font-weight: 800;
+        white-space: normal;
     }
     div[data-testid="stTextInput"] input {
         border-radius: 14px;
@@ -743,16 +800,128 @@ st.markdown(
         .legend-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .steps-grid { grid-template-columns: 1fr; }
     }
-    @media (max-width: 620px) {
-        .block-container { padding-top: 1rem; }
+    @media (max-width: 768px) {
+        .block-container {
+            padding-top: max(3.75rem, calc(env(safe-area-inset-top) + 3.25rem));
+            padding-inline: .75rem;
+            padding-bottom: max(8rem, calc(env(safe-area-inset-bottom) + 6rem));
+        }
+        .st-key-site_language {
+            width: 9.5rem;
+            max-width: calc(100vw - 1.5rem);
+            margin-bottom: .55rem;
+        }
+        .hero {
+            padding: clamp(1rem, 4.5vw, 1.35rem);
+            border-radius: 20px;
+            margin-bottom: .8rem;
+        }
+        .hero h1 {
+            font-size: clamp(1.9rem, 9vw, 2.85rem);
+            line-height: 1.12;
+        }
+        .hero p {
+            font-size: clamp(.96rem, 4vw, 1.12rem);
+            line-height: 1.55;
+        }
+        .hero-kicker,
+        .microcopy {
+            border-radius: 10px;
+            font-size: .82rem;
+        }
+        .section-intro {
+            margin-top: 1.45rem;
+        }
+        .section-intro h2 {
+            font-size: clamp(1.35rem, 6vw, 1.8rem);
+            line-height: 1.2;
+        }
+        .legend-grid,
+        .steps-grid {
+            grid-template-columns: 1fr;
+        }
+        .credit-card {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        [data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap;
+            gap: .75rem;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+            flex: 1 1 100% !important;
+            width: 100% !important;
+            min-width: 0 !important;
+        }
+        div[data-testid="stLinkButton"],
+        div[data-testid="stLinkButton"] a,
+        div[data-testid="stDownloadButton"],
+        div[data-testid="stDownloadButton"] button {
+            width: 100%;
+        }
+        div[data-testid="stMetric"] {
+            width: 100%;
+            min-width: 0;
+        }
+    }
+    @media (max-width: 480px) {
+        .block-container {
+            padding-top: max(3.75rem, calc(env(safe-area-inset-top) + 3.25rem));
+            padding-inline: .6rem;
+            padding-bottom: max(9rem, calc(env(safe-area-inset-bottom) + 7rem));
+        }
+        .st-key-site_language {
+            width: 8.75rem;
+            max-width: calc(100vw - 1.2rem);
+        }
+        .hero {
+            padding: .9rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, .06);
+        }
+        .hero h1 {
+            font-size: clamp(1.75rem, 10vw, 2.35rem);
+        }
+        .hero p {
+            font-size: clamp(.94rem, 4.4vw, 1.05rem);
+        }
+        .hero-kicker,
+        .microcopy {
+            display: block;
+            width: fit-content;
+            max-width: 100%;
+        }
+        .disclaimer-box,
+        .stage-card,
+        .step-card,
+        .info-card,
+        .public-interest-card,
+        .credit-card,
+        .legend-card {
+            padding: .85rem;
+            border-radius: 14px;
+        }
+        .stage-number {
+            font-size: clamp(1.25rem, 7vw, 1.75rem);
+            line-height: 1.2;
+        }
+        .glossary-chip {
+            max-width: 100%;
+            white-space: normal;
+        }
         .legend-grid { grid-template-columns: 1fr; }
-        .legend-card { min-height: 0; }
-        .credit-card { align-items: flex-start; flex-direction: column; }
     }
     </style>
-    """.replace("__DIRECTION__", direction).replace("__TEXT_ALIGN__", text_align),
-    unsafe_allow_html=True,
-)
+    """
+    st.markdown(
+        css.replace("__DIRECTION__", direction).replace(
+            "__TEXT_ALIGN__", text_align
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+inject_mobile_css(direction, text_align)
 
 
 DEFAULT_COLUMNS: dict[str, Any] = {
@@ -1265,7 +1434,6 @@ else:
         table,
         width="stretch",
         hide_index=True,
-        height=480,
         column_config={
             t("table_stage"): st.column_config.TextColumn(
                 t("table_stage"),
