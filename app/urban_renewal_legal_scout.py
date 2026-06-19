@@ -440,6 +440,11 @@ REFRESH_REPORT_PATH = (
     PROJECT_ROOT / "data" / "metadata" / "latest_refresh_report.csv"
 )
 
+
+def file_mtime(path: Path) -> float:
+    return path.stat().st_mtime if path.exists() else 0.0
+
+
 st.set_page_config(
     page_title="כאוס עירוני | Urban Chaos",
     page_icon="🏠",
@@ -1106,9 +1111,10 @@ def ensure_columns(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def load_public_data(language: str) -> pd.DataFrame:
-    # `language` is intentionally part of the cache key because controlled
-    # display fields such as stage names and completeness labels are localized.
+def load_public_data(language: str, data_mtime: float) -> pd.DataFrame:
+    # Language and file modification time are intentionally part of the cache
+    # key. Controlled display fields are localized, and refreshed CSV data must
+    # be reloaded after an automated update.
     if not PUBLIC_DATA_PATH.exists():
         return pd.DataFrame(columns=DEFAULT_COLUMNS)
     return ensure_columns(
@@ -1117,7 +1123,7 @@ def load_public_data(language: str) -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def load_refresh_report() -> pd.DataFrame:
+def load_refresh_report(report_mtime: float) -> pd.DataFrame:
     if not REFRESH_REPORT_PATH.exists():
         return pd.DataFrame()
     return pd.read_csv(
@@ -1253,8 +1259,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-data = load_public_data(lang)
-refresh_report = load_refresh_report()
+data = load_public_data(lang, file_mtime(PUBLIC_DATA_PATH))
+refresh_report = load_refresh_report(file_mtime(REFRESH_REPORT_PATH))
 
 if data.empty:
     st.error(t("missing_data_file"))
